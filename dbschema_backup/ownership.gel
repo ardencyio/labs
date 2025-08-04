@@ -1,0 +1,24 @@
+module ownership {
+   # Types of equity holders/investors in a company
+   scalar type Party extending enum<Founder, Angel, Venture, Private, Corporate, Impact, Stock, Employee, Government, Other>;
+   
+   # Individual ownership stake in a company
+   type Stake extending default::Timestamp {
+       link table: ownership::Table;  # Associated cap table
+       required link holder: (companies::Company | people::Person);  # Owner of this stake
+       property color: std::str;  # For UI visualization
+       property class: Party;  # Classification of investor type
+       property percent: std::float32;  # Ownership percentage
+       property shares: std::int64;  # Absolute number of shares
+   };
+   
+   # Capitalization table - point-in-time snapshot of ownership
+   type Table extending default::Timestamp {
+       required link company: companies::Company;  # Company being tracked
+       link funding: funding::Capital;  # Associated funding round if any
+       multi link stakes := (.<table[is ownership::Stake]);  # All ownership stakes
+       property date: std::datetime;  # When this cap table was created/valid
+       property total: std::int64;  # Total outstanding shares
+       property notes: std::str;  # Additional context or explanations
+   }
+}

@@ -1,0 +1,29 @@
+using extension pgvector;
+using extension pgcrypto;
+using extension auth;
+using extension ai;
+using future simple_scoping;
+
+module default {
+  # Global variable for authenticated user (used by access policies)
+  # Automatically resolves from EdgeDB auth extension
+  global current_user := (
+    assert_single((
+      select people::Person
+      filter .identity = global ext::auth::ClientTokenIdentity
+    ))
+  );
+
+  scalar type Stage extending enum<Draft, Active, Closed, Extended, Canceled>;
+  scalar type Activation extending enum<Active, Inactive>;
+
+  abstract type Timestamp {
+    required created: datetime {
+      rewrite insert using (datetime_of_statement())
+    };
+    required updated: datetime {
+      rewrite update using (datetime_of_statement())
+    };
+  }
+}
+

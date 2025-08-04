@@ -1,0 +1,265 @@
+#!/bin/bash
+# Complete Gel Database Setup Script
+# This script provides a repeatable process that configures the database, applies schema, and loads seed data
+#
+# Usage: ./setup.sh -I INSTANCE [OPTIONS]
+# Required:
+#   -I INSTANCE   Gel instance name (required)
+# Options:
+#   -b BRANCH     Target branch name (default: dev)
+#   -d, --drop    Drop and recreate branch (DESTRUCTIVE)  
+#   -w, --wipe    Wipe branch data only (preserves branch)
+#   -h, --help    Show this help
+#
+# Default: wipe dev branch data only
+
+set -e
+
+# Default options
+INSTANCE_NAME=""
+BRANCH_NAME="dev"
+DROP_BRANCH=false
+WIPE_ONLY=true
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -I|--instance)
+            INSTANCE_NAME="$2"
+            shift 2
+            ;;
+        -b|--branch)
+            BRANCH_NAME="$2"
+            shift 2
+            ;;
+        -d|--drop)
+            DROP_BRANCH=true
+            WIPE_ONLY=false
+            shift
+            ;;
+        -w|--wipe)
+            DROP_BRANCH=false
+            WIPE_ONLY=true
+            shift
+            ;;
+        -h|--help)
+            echo "Gel Database Setup Script"
+            echo ""
+            echo "Usage: $0 -I INSTANCE [OPTIONS]"
+            echo ""
+            echo "Required:"
+            echo "  -I INSTANCE   Gel instance name (required)"
+            echo ""
+            echo "Options:"
+            echo "  -b BRANCH     Target branch name (default: dev)"
+            echo "  -d, --drop    Drop and recreate branch (DESTRUCTIVE)"
+            echo "  -w, --wipe    Wipe branch data only (preserves branch)"
+            echo "  -h, --help    Show this help"
+            echo ""
+            echo "Default: wipe dev branch data only"
+            exit 0
+            ;;
+        *)
+            print_error "Unknown option: $1"
+            echo "Use -h or --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print colored output
+print_step() {
+    echo -e "${BLUE}==>${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}✗${NC} $1"
+}
+
+# Validate required arguments
+if [[ -z "$INSTANCE_NAME" ]]; then
+    print_error "Instance name is required. Use -I to specify instance."
+    echo "Example: $0 -I labs"
+    echo "Use -h or --help for usage information"
+    exit 1
+fi
+
+# Check if .env file exists
+if [[ ! -f ".env" ]]; then
+    print_error ".env file not found!"
+    echo "Please copy .env.example to .env and configure your credentials:"
+    echo "  cp .env.example .env"
+    echo "  # Edit .env with your secure credentials"
+    exit 1
+fi
+
+# Load environment variables
+print_step "Loading environment variables from .env"
+source .env
+
+# Check required environment variables
+if [[ -z "$GEL_SERVER_PASSWORD" ]]; then
+    print_error "GEL_SERVER_PASSWORD not set in .env file"
+    exit 1
+fi
+
+if [[ -z "$AUTH_SIGNING_KEY" ]]; then
+    print_error "AUTH_SIGNING_KEY not set in .env file"
+    exit 1
+fi
+
+print_success "Environment variables loaded"
+
+# Function to setup database
+setup_database() {
+    print_step "Setting up fresh database"
+    
+    # Create main and dev branches if they don't exist
+    print_step "Ensuring main and dev branches exist"
+    
+    # Check if branches exist before creating
+    if ! gel -I "$INSTANCE_NAME" branch list | grep -q "main"; then
+        gel -I "$INSTANCE_NAME" branch create main
+        print_success "Created main branch"
+    else
+        print_success "Main branch exists"
+    fi
+    
+    if ! gel -I "$INSTANCE_NAME" branch list | grep -q "dev"; then
+        gel -I "$INSTANCE_NAME" branch create dev
+        print_success "Created dev branch"
+    else
+        print_success "Dev branch exists"
+    fi
+    
+    # Switch to target branch
+    current_branch=$(gel -I "$INSTANCE_NAME" branch list | grep "Current" | awk '{print $1}' | sed 's/\x1b\[[0-9;]*m//g')
+    if [[ "$current_branch" != "$BRANCH_NAME" ]]; then
+        gel -I "$INSTANCE_NAME" branch switch "$BRANCH_NAME"
+        print_success "Switched to $BRANCH_NAME branch"
+    fi
+    
+    # Handle branch reset based on flags
+    if [[ "$DROP_BRANCH" == true ]]; then
+        print_step "Dropping and recreating $BRANCH_NAME branch"
+        # Switch to a different branch to drop the target
+        if [[ "$BRANCH_NAME" == "main" ]]; then
+            gel -I "$INSTANCE_NAME" branch switch dev
+        else
+            gel -I "$INSTANCE_NAME" branch switch main
+        fi
+        gel -I "$INSTANCE_NAME" branch drop "$BRANCH_NAME" --force
+        gel -I "$INSTANCE_NAME" branch create "$BRANCH_NAME"
+        gel -I "$INSTANCE_NAME" branch switch "$BRANCH_NAME"
+        print_success "Branch dropped and recreated"
+    elif [[ "$WIPE_ONLY" == true ]]; then
+        print_step "Wiping $BRANCH_NAME branch data"
+        gel -I "$INSTANCE_NAME" branch wipe "$BRANCH_NAME" --non-interactive
+        print_success "Branch data wiped"
+    fi
+    
+    # Apply schema migrations
+    print_step "Applying schema migrations"
+    gel migrate
+    print_success "Schema migrations applied"
+    
+    # Apply configuration with environment variables
+    print_step "Applying configuration"
+    export GEL_SERVER_PASSWORD AUTH_SIGNING_KEY
+    if envsubst < config.edgeql | gel query -f - 2>/dev/null; then
+        print_success "Configuration applied"
+    else
+        print_warning "Configuration partially applied (some providers may already exist)"
+    fi
+    
+    # Run seed scripts using existing orchestrator (skip its reset since we already did it)
+    print_step "Running seed scripts"
+    if cd seed/scripts && SKIP_RESET=1 INSTANCE_NAME="$INSTANCE_NAME" ./run_seeds.sh && cd ../..; then
+        print_success "Seed data loaded"
+    else
+        print_error "Failed to load seed data"
+        return 1
+    fi
+}
+
+# Function to verify setup
+verify_setup() {
+    print_step "Verifying setup"
+    
+    # Check admin user
+    admin_check=$(gel query "SELECT sys::Role { name, superuser } FILTER .name = 'goose';" 2>/dev/null || echo "")
+    if [[ $admin_check == *"\"superuser\": true"* ]]; then
+        print_success "Admin user configured"
+    else
+        print_error "Admin user not configured"
+        return 1
+    fi
+    
+    # Check authentication configuration
+    auth_count=$(gel query "SELECT count(cfg::Auth);" 2>/dev/null || echo "0")
+    if [[ $auth_count -gt 0 ]]; then
+        print_success "Authentication configured"
+    else
+        print_warning "Authentication may be incomplete"
+    fi
+    
+    print_success "Setup verification completed"
+}
+
+# Main execution
+main() {
+    echo -e "${BLUE}======================================\n    Gel Database Setup Script         \n======================================${NC}\n"
+    
+    # Confirm with user before proceeding
+    echo -e "${YELLOW}This will:"
+    if [[ "$DROP_BRANCH" == true ]]; then
+        echo "  - Drop and recreate $BRANCH_NAME branch (DESTRUCTIVE)"
+    else
+        echo "  - Wipe $BRANCH_NAME branch data (preserves branch)"
+    fi
+    echo "  - Create main and dev branches if needed"
+    echo "  - Apply schema migrations"
+    echo "  - Configure authentication"
+    echo "  - Load seed data"
+    echo ""
+    echo "Instance: $INSTANCE_NAME"
+    echo "Branch: $BRANCH_NAME"
+    echo -e "${NC}"
+    
+    read -p "Continue? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        print_warning "Setup cancelled"
+        exit 0
+    fi
+    
+    # Run setup
+    setup_database
+    verify_setup
+    
+    echo -e "\n${GREEN}======================================\n         Setup Complete               \n======================================${NC}\n"
+    echo "Database ready with:"
+    echo "  - Authentication configured (user: goose)"
+    echo "  - Schema and policies applied"
+    echo "  - Seed data loaded"
+    echo
+    echo "Next: gel ui"
+}
+
+# Run main function
+main "$@"

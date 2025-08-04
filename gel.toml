@@ -1,0 +1,20 @@
+watch = []
+
+[instance]
+server-version = "6.9"
+
+# Server configuration - secrets loaded from environment variables
+[server]
+# Admin UI enabled via environment variable GEL_SERVER_ADMIN_UI
+# Authentication method controlled via GEL_SERVER_DEFAULT_AUTH_METHOD
+# Security mode controlled via GEL_SERVER_SECURITY
+# Bootstrap commands loaded from GEL_SERVER_BOOTSTRAP_COMMAND
+
+# Project configuration
+[project]
+schema-dir = "dbschema"
+
+# Development settings
+[options]
+# Access policies can be bypassed for admin users
+# This is controlled at runtime via bootstrap commands
