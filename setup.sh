@@ -181,6 +181,14 @@ apply_seed_data() {
         print_success "Switched to $BRANCH_NAME branch"
     fi
     
+    # Disable access policies for seeding
+    print_step "Disabling access policies for seeding"
+    if gel -I "$INSTANCE_NAME" query "CONFIGURE SYSTEM SET apply_access_policies := false;" 2>/dev/null; then
+        print_success "Access policies disabled"
+    else
+        print_warning "Could not disable access policies, continuing anyway"
+    fi
+    
     # Run seed scripts using existing orchestrator (skip its reset since we're seed-only)
     print_step "Running seed scripts"
     if cd seed/scripts && SKIP_RESET=1 INSTANCE_NAME="$INSTANCE_NAME" ./run_seeds.sh && cd ../..; then
@@ -272,6 +280,14 @@ setup_database() {
         print_success "Configuration applied"
     else
         print_warning "Configuration partially applied (some providers may already exist)"
+    fi
+    
+    # Disable access policies for seeding
+    print_step "Disabling access policies for seeding"
+    if gel -I "$INSTANCE_NAME" query "CONFIGURE SYSTEM SET apply_access_policies := false;" 2>/dev/null; then
+        print_success "Access policies disabled for seeding"
+    else
+        print_warning "Could not disable access policies, continuing anyway"
     fi
     
     # Run seed scripts using existing orchestrator (skip its reset since we already did it)
