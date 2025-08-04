@@ -1,3 +1,6 @@
+# People and user management system
+# Contains person profiles and investment criteria with access policies
+
 module people {
     scalar type Role extending enum<Founder, Ceo, Cto, Cfo, Coo, Investor, Board, Advisor, Employee, Other>;
     
@@ -9,7 +12,6 @@ module people {
         property preferred_industries: array<str>;
         property investment_stage: str;
         
-        # Owner-only access for investment criteria (personal financial data)
         access policy owner
           allow all
           using (exists global default::current_user and global default::current_user.id ?= .person.id) {
@@ -39,12 +41,10 @@ module people {
         property role: Role;
         property profile: str;
         
-        # Owner-only access for personal profile data (privacy protection)
-        # Even admins cannot modify personal profiles - only the individual user
         access policy owner
           allow all
           using (exists global default::current_user and global default::current_user.id ?= .id) {
             errmessage := "Only the person can modify their own profile";
           };
     }
-};
+}

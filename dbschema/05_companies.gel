@@ -1,3 +1,6 @@
+# Company and business entity management
+# Contains company profiles and key metrics
+
 module companies {
   type Company extending default::Timestamp {
     required name: str;

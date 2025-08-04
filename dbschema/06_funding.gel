@@ -1,3 +1,6 @@
+# Funding and investment management system
+# Contains funding rounds, allocations, and investment records
+
 module funding {
   scalar type Round extending enum<
     Pre,

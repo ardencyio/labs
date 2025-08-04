@@ -1,3 +1,6 @@
+# Content and media management system
+# Contains articles, recognitions, and related content
+
 module content {
   type Article extending default::Timestamp {
     date: datetime;

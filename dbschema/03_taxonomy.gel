@@ -1,3 +1,6 @@
+# Taxonomy and classification system
+# Contains tags, industries, and goals for categorization
+
 module taxonomy {
     type Tag extending default::Timestamp {
         property color: std::str;

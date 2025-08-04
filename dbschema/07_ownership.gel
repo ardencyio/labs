@@ -1,0 +1,24 @@
+# Ownership and equity management system
+# Contains ownership tables and stake records
+
+module ownership {
+   scalar type Party extending enum<Founder, Angel, Venture, Private, Corporate, Impact, Stock, Employee, Government, Other>;
+   
+   type Stake extending default::Timestamp {
+       link table: ownership::Table;
+       required link holder: (companies::Company | people::Person);
+       property color: std::str;
+       property class: Party;
+       property percent: std::float32;
+       property shares: std::int64;
+   };
+   
+   type Table extending default::Timestamp {
+       required link company: companies::Company;
+       link funding: funding::Capital;
+       multi link stakes := (.<table[is ownership::Stake]);
+       property date: std::datetime;
+       property total: std::int64;
+       property notes: std::str;
+   }
+}
