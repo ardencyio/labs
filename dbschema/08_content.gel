@@ -1,0 +1,36 @@
+# Content and media management system
+# Contains articles, recognitions, and related content
+
+module content {
+  type Article extending default::Timestamp {
+    date: datetime;
+    title: str;
+    content: str;
+    source_type: str;  # Twitter, PressRelease, etc.
+    url: str;
+    
+    # RBAC integration
+    author: people::Person;
+    published: bool { default := false }
+    
+    # link
+    required link company: companies::Company;
+    
+  }
+  
+  type Recognition extending default::Timestamp {
+    title: str;
+    year: int16;
+    organization: str;
+    description: str;
+    recognition_type: str;  # Award, Partnership, etc.
+    
+    # RBAC integration
+    added_by: people::Person;
+    verified: bool { default := false }
+    
+    # link
+    required link company: companies::Company;
+    
+  }
+}

@@ -1,0 +1,52 @@
+# Company and business entity management
+# Contains company profiles and key metrics
+
+module companies {
+  type Company extending default::Timestamp {
+    required name: str;
+    tagline: str;
+    mission: str;
+    description: str;
+    logo_url: str;
+    founded: datetime;
+    required public: bool {
+      default := false
+    };
+    status: default::Activation;
+    multi industries: taxonomy::Industry;
+    headquarters: str;
+    multi operations: str;
+    team_size: int32;
+    technical_staff: int32;
+    website: str;
+    
+    # links
+    multi tags: taxonomy::Tag;
+    multi funding := .<company[is funding::Capital];
+    multi ownership: ownership::Table;
+    multi goals: taxonomy::Goal;
+    multi articles: content::Article;
+    multi recognitions: content::Recognition;
+    multi people: people::Person;
+    
+    # Computed properties
+    multi investments := .<company[is funding::Investment];
+    multi investors := .<company[is funding::Investment].investor;
+    
+    # NO ACCESS POLICIES - gRPC interceptors handle all access control
+    # This makes the database completely portable and moves permission logic to application layer
+  }
+
+  type KeyMetrics extending default::Timestamp {
+    metric_name: str;
+    metric_value: str;
+    growth_rate: float32;
+    runway: int16;
+    
+    # link
+    required link company: Company;
+    
+    # NO ACCESS POLICIES - gRPC interceptors handle all access control
+    # This makes the database completely portable and moves permission logic to application layer
+  }
+}
