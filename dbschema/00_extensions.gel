@@ -1,0 +1,8 @@
+# Extensions and core database configuration
+# This file must be loaded first to ensure extensions are available
+
+using extension pgvector;
+using extension pgcrypto;
+using extension auth;
+using extension ai;
+using future simple_scoping;
