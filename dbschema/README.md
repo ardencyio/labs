@@ -4,24 +4,22 @@ This directory contains the Gel database schema split into modular files for bet
 
 ## File Loading Order
 
-EdgeDB loads schema files automatically from this directory. Files are prefixed with numbers to ensure proper loading order:
+EdgeDB loads schema files automatically from this directory. Files are numbered to ensure proper loading order:
 
-1. **00_extensions.gel** - Database extensions (pgvector, pgcrypto, auth, ai)
-2. **01_base.gel** - Core types and global variables  
-3. **02_access.gel** - Permission and policy system
-4. **03_taxonomy.gel** - Tags, industries, and goals
-5. **04_people.gel** - Person profiles and investment criteria
-6. **05_companies.gel** - Company profiles and metrics
-7. **06_funding.gel** - Investment rounds and funding data
-8. **07_ownership.gel** - Equity and ownership tables
-9. **08_content.gel** - Articles and recognition content
+1. **default.gel** - Extensions and core types (pgvector, pgcrypto, auth, ai + base types)
+2. **02_access.gel** - Permission and policy system
+3. **03_taxonomy.gel** - Tags, industries, and goals
+4. **04_people.gel** - Person profiles and investment criteria
+5. **05_companies.gel** - Company profiles and metrics
+6. **06_funding.gel** - Investment rounds and funding data
+7. **07_ownership.gel** - Equity and ownership tables
+8. **08_content.gel** - Articles and recognition content
 
 ## Module Dependencies
 
 The modules have the following dependency relationships:
 
-- **Extensions** → Used by all other modules
-- **Base** → Provides Timestamp abstract type and global variables  
+- **Default** → Extensions and base types used by all other modules
 - **Access** → Referenced by people module for policies
 - **Taxonomy** → Referenced by companies, funding, and people modules
 - **People** → Referenced by companies, funding, ownership, and content modules

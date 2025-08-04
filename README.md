@@ -69,17 +69,16 @@ gel query -f seed/scripts/04_investment.edgeql
 
 ### Modular Schema Design
 
-The database schema is organized into 9 modular files for better maintainability:
+The database schema is organized into 8 modular files for better maintainability:
 
-1. **Extensions** (`00_extensions.gel`) - Database extensions (pgvector, pgcrypto, auth, ai)
-2. **Base Types** (`01_base.gel`) - Core types, global variables, and abstract Timestamp type
-3. **Access Control** (`02_access.gel`) - Permission and Policy types for RBAC
-4. **Taxonomy** (`03_taxonomy.gel`) - Tag, Industry, and Goal types for categorization
-5. **People** (`04_people.gel`) - Person and Criteria types with access policies
-6. **Companies** (`05_companies.gel`) - Company and KeyMetrics types
-7. **Funding** (`06_funding.gel`) - Capital, Investment, and Allocation types
-8. **Ownership** (`07_ownership.gel`) - Stake and Table types for equity management
-9. **Content** (`08_content.gel`) - Article and Recognition types
+1. **Default** (`default.gel`) - Extensions and core types (pgvector, pgcrypto, auth, ai + base types)
+2. **Access Control** (`02_access.gel`) - Permission and Policy types for RBAC
+3. **Taxonomy** (`03_taxonomy.gel`) - Tag, Industry, and Goal types for categorization
+4. **People** (`04_people.gel`) - Person and Criteria types with access policies
+5. **Companies** (`05_companies.gel`) - Company and KeyMetrics types
+6. **Funding** (`06_funding.gel`) - Capital, Investment, and Allocation types
+7. **Ownership** (`07_ownership.gel`) - Stake and Table types for equity management
+8. **Content** (`08_content.gel`) - Article and Recognition types
 
 ### Benefits of Modular Structure
 
@@ -191,8 +190,7 @@ gel ui  # Opens admin UI with Trust authentication
 ├── config.template.edgeql         # Configuration template with documentation (safe to commit)
 ├── setup.sh                       # Automated database setup script with text character icons
 ├── dbschema/                      # Modular database schema files
-│   ├── 00_extensions.gel          # Database extensions (pgvector, pgcrypto, auth, ai)
-│   ├── 01_base.gel                # Core types and global variables
+│   ├── default.gel                # Extensions and core types (pgvector, pgcrypto, auth, ai + base types)
 │   ├── 02_access.gel              # Permission and policy system
 │   ├── 03_taxonomy.gel            # Tags, industries, and goals
 │   ├── 04_people.gel              # Person profiles and investment criteria
