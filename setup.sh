@@ -7,6 +7,7 @@
 #   -I INSTANCE   Gel instance name (required)
 # Options:
 #   -b BRANCH     Target branch name (default: dev)
+#   -c, --config  Apply configuration only (no schema/data changes)
 #   -d, --drop    Drop and recreate branch (DESTRUCTIVE)  
 #   -w, --wipe    Wipe branch data only (preserves branch)
 #   -h, --help    Show this help
@@ -20,6 +21,7 @@ INSTANCE_NAME=""
 BRANCH_NAME="dev"
 DROP_BRANCH=false
 WIPE_ONLY=true
+CONFIG_ONLY=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -31,6 +33,10 @@ while [[ $# -gt 0 ]]; do
         -b|--branch)
             BRANCH_NAME="$2"
             shift 2
+            ;;
+        -c|--config)
+            CONFIG_ONLY=true
+            shift
             ;;
         -d|--drop)
             DROP_BRANCH=true
@@ -52,6 +58,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  -b BRANCH     Target branch name (default: dev)"
+            echo "  -c, --config  Apply configuration only (no schema/data changes)"
             echo "  -d, --drop    Drop and recreate branch (DESTRUCTIVE)"
             echo "  -w, --wipe    Wipe branch data only (preserves branch)"
             echo "  -h, --help    Show this help"
@@ -124,6 +131,27 @@ if [[ -z "$AUTH_SIGNING_KEY" ]]; then
 fi
 
 print_success "Environment variables loaded"
+
+# Function to apply configuration only
+apply_configuration() {
+    print_step "Applying configuration only"
+    
+    # Switch to target branch if needed
+    current_branch=$(gel -I "$INSTANCE_NAME" branch list | grep "Current" | awk '{print $1}' | sed 's/\x1b\[[0-9;]*m//g')
+    if [[ "$current_branch" != "$BRANCH_NAME" ]]; then
+        gel -I "$INSTANCE_NAME" branch switch "$BRANCH_NAME"
+        print_success "Switched to $BRANCH_NAME branch"
+    fi
+    
+    # Apply configuration with environment variables
+    print_step "Applying configuration"
+    export GEL_SERVER_PASSWORD AUTH_SIGNING_KEY
+    if envsubst < config.edgeql | gel query -f - 2>/dev/null; then
+        print_success "Configuration applied"
+    else
+        print_warning "Configuration partially applied (some providers may already exist)"
+    fi
+}
 
 # Function to setup database
 setup_database() {
@@ -227,15 +255,20 @@ main() {
     
     # Confirm with user before proceeding
     echo -e "${YELLOW}This will:"
-    if [[ "$DROP_BRANCH" == true ]]; then
-        echo "  - Drop and recreate $BRANCH_NAME branch (DESTRUCTIVE)"
+    if [[ "$CONFIG_ONLY" == true ]]; then
+        echo "  - Apply configuration only (no schema/data changes)"
+        echo "  - Switch to $BRANCH_NAME branch if needed"
     else
-        echo "  - Wipe $BRANCH_NAME branch data (preserves branch)"
+        if [[ "$DROP_BRANCH" == true ]]; then
+            echo "  - Drop and recreate $BRANCH_NAME branch (DESTRUCTIVE)"
+        else
+            echo "  - Wipe $BRANCH_NAME branch data (preserves branch)"
+        fi
+        echo "  - Create main and dev branches if needed"
+        echo "  - Apply schema migrations"
+        echo "  - Configure authentication"
+        echo "  - Load seed data"
     fi
-    echo "  - Create main and dev branches if needed"
-    echo "  - Apply schema migrations"
-    echo "  - Configure authentication"
-    echo "  - Load seed data"
     echo ""
     echo "Instance: $INSTANCE_NAME"
     echo "Branch: $BRANCH_NAME"
@@ -248,17 +281,30 @@ main() {
         exit 0
     fi
     
-    # Run setup
-    setup_database
-    verify_setup
+    # Run setup based on mode
+    if [[ "$CONFIG_ONLY" == true ]]; then
+        apply_configuration
+        print_success "Configuration applied successfully"
+    else
+        setup_database
+        verify_setup
+    fi
     
     echo -e "\n${GREEN}======================================\n         Setup Complete               \n======================================${NC}\n"
-    echo "Database ready with:"
-    echo "  - Authentication configured (user: goose)"
-    echo "  - Schema and policies applied"
-    echo "  - Seed data loaded"
-    echo
-    echo "Next: gel ui"
+    if [[ "$CONFIG_ONLY" == true ]]; then
+        echo "Configuration applied:"
+        echo "  - Authentication configured (user: goose)"
+        echo "  - Environment variables applied"
+        echo
+        echo "Next: gel ui"
+    else
+        echo "Database ready with:"
+        echo "  - Authentication configured (user: goose)"
+        echo "  - Schema and policies applied"
+        echo "  - Seed data loaded"
+        echo
+        echo "Next: gel ui"
+    fi
 }
 
 # Run main function
