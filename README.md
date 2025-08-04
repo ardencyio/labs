@@ -19,6 +19,8 @@ cp .env.example .env
 ./setup.sh -I labs -c                 # Apply configuration only (no reset, no seed)
 ./setup.sh -I labs -c -b main         # Apply config to main branch only
 ./setup.sh -I labs -m                 # Migration only (create and/or apply migrations)
+./setup.sh -I labs -p                 # Configure access policies (main=enabled, dev=disabled)
+./setup.sh -I labs -p -b main         # Enable access policies on main branch
 ./setup.sh -I labs -s                 # Seed only steps (load seed data)
 ./setup.sh -I labs -d                 # Drop and recreate dev branch (DESTRUCTIVE)
 ./setup.sh -I labs -b main -d         # Drop and recreate main branch (DESTRUCTIVE)
@@ -28,10 +30,16 @@ cp .env.example .env
 The setup script will:
 - Create main and dev branches if they don't exist
 - Reset the target branch (dev by default, wipe data by default, or drop/recreate with -d flag)
-- Apply schema migrations from modular schema files
+- Apply schema migrations from modular schema files  
 - Configure authentication with environment variables
+- Configure access policies based on branch (main=enabled, dev=disabled)
 - Load all seed data (companies, people, investments, etc.)
 - Verify the setup completed successfully
+
+### Access Policy Configuration
+- **main branch**: Access policies enabled (data access controlled by schema policies)  
+- **dev branch**: Access policies disabled (full data access for development)
+- Use `-p` flag to configure policies independently of other operations
 
 ### Manual Setup (Alternative)
 

@@ -10,11 +10,13 @@
 #   -c, --config  Apply configuration only (no schema/data changes)
 #   -d, --drop    Drop and recreate branch (DESTRUCTIVE)  
 #   -m, --migrate Migration only (create and/or apply migrations)
+#   -p, --policies Configure access policies (enable/disable based on branch)
 #   -s, --seed    Seed only steps (load seed data)
 #   -w, --wipe    Wipe branch data only (preserves branch)
 #   -h, --help    Show this help
 #
 # Default: wipe dev branch data only
+# Access policies: main=enabled, dev=disabled
 
 set -e
 
@@ -26,6 +28,7 @@ WIPE_ONLY=true
 CONFIG_ONLY=false
 MIGRATE_ONLY=false
 SEED_ONLY=false
+POLICIES_ONLY=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -51,6 +54,10 @@ while [[ $# -gt 0 ]]; do
             MIGRATE_ONLY=true
             shift
             ;;
+        -p|--policies)
+            POLICIES_ONLY=true
+            shift
+            ;;
         -s|--seed)
             SEED_ONLY=true
             shift
@@ -73,6 +80,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -c, --config  Apply configuration only (no schema/data changes)"
             echo "  -d, --drop    Drop and recreate branch (DESTRUCTIVE)"
             echo "  -m, --migrate Migration only (create and/or apply migrations)"
+            echo "  -p, --policies Configure access policies (main=enabled, dev=disabled)"
             echo "  -s, --seed    Seed only steps (load seed data)"
             echo "  -w, --wipe    Wipe branch data only (preserves branch)"
             echo "  -h, --help    Show this help"
@@ -181,12 +189,21 @@ apply_seed_data() {
         print_success "Switched to $BRANCH_NAME branch"
     fi
     
-    # Disable access policies for seeding
-    print_step "Disabling access policies for seeding"
-    if gel -I "$INSTANCE_NAME" query "CONFIGURE SYSTEM SET apply_access_policies := false;" 2>/dev/null; then
-        print_success "Access policies disabled"
+    # Configure access policies based on branch
+    if [[ "$BRANCH_NAME" == "main" ]]; then
+        print_step "Temporarily disabling access policies for seeding on main branch"
+        if gel -I "$INSTANCE_NAME" query "CONFIGURE SYSTEM SET apply_access_policies := false;" 2>/dev/null; then
+            print_success "Access policies temporarily disabled for seeding"
+        else
+            print_warning "Could not disable access policies, continuing anyway"
+        fi
     else
-        print_warning "Could not disable access policies, continuing anyway"
+        print_step "Disabling access policies for dev branch"
+        if gel -I "$INSTANCE_NAME" query "CONFIGURE SYSTEM SET apply_access_policies := false;" 2>/dev/null; then
+            print_success "Access policies disabled for dev branch"
+        else
+            print_warning "Could not disable access policies, continuing anyway"
+        fi
     fi
     
     # Run seed scripts using existing orchestrator (skip its reset since we're seed-only)
@@ -196,6 +213,45 @@ apply_seed_data() {
     else
         print_error "Failed to load seed data"
         return 1
+    fi
+    
+    # Re-enable access policies for main branch after seeding
+    if [[ "$BRANCH_NAME" == "main" ]]; then
+        print_step "Re-enabling access policies for main branch"
+        if gel -I "$INSTANCE_NAME" query "CONFIGURE SYSTEM SET apply_access_policies := true;" 2>/dev/null; then
+            print_success "Access policies re-enabled for main branch"
+        else
+            print_warning "Could not re-enable access policies"
+        fi
+    fi
+}
+
+# Function to configure access policies only
+configure_access_policies() {
+    print_step "Configuring access policies based on branch"
+    
+    # Switch to target branch if needed
+    current_branch=$(gel -I "$INSTANCE_NAME" branch list | grep "Current" | awk '{print $1}' | sed 's/\x1b\[[0-9;]*m//g')
+    if [[ "$current_branch" != "$BRANCH_NAME" ]]; then
+        gel -I "$INSTANCE_NAME" branch switch "$BRANCH_NAME"
+        print_success "Switched to $BRANCH_NAME branch"
+    fi
+    
+    # Configure policies based on branch
+    if [[ "$BRANCH_NAME" == "main" ]]; then
+        print_step "Enabling access policies for main branch"
+        if gel -I "$INSTANCE_NAME" query "CONFIGURE SYSTEM SET apply_access_policies := true;" 2>/dev/null; then
+            print_success "Access policies enabled for main branch"
+        else
+            print_warning "Could not enable access policies"
+        fi
+    else
+        print_step "Disabling access policies for dev branch"
+        if gel -I "$INSTANCE_NAME" query "CONFIGURE SYSTEM SET apply_access_policies := false;" 2>/dev/null; then
+            print_success "Access policies disabled for dev branch"
+        else
+            print_warning "Could not disable access policies"
+        fi
     fi
 }
 
@@ -282,12 +338,21 @@ setup_database() {
         print_warning "Configuration partially applied (some providers may already exist)"
     fi
     
-    # Disable access policies for seeding
-    print_step "Disabling access policies for seeding"
-    if gel -I "$INSTANCE_NAME" query "CONFIGURE SYSTEM SET apply_access_policies := false;" 2>/dev/null; then
-        print_success "Access policies disabled for seeding"
+    # Configure access policies based on branch
+    if [[ "$BRANCH_NAME" == "main" ]]; then
+        print_step "Temporarily disabling access policies for seeding on main branch"
+        if gel -I "$INSTANCE_NAME" query "CONFIGURE SYSTEM SET apply_access_policies := false;" 2>/dev/null; then
+            print_success "Access policies temporarily disabled for seeding"
+        else
+            print_warning "Could not disable access policies, continuing anyway"
+        fi
     else
-        print_warning "Could not disable access policies, continuing anyway"
+        print_step "Disabling access policies for dev branch"
+        if gel -I "$INSTANCE_NAME" query "CONFIGURE SYSTEM SET apply_access_policies := false;" 2>/dev/null; then
+            print_success "Access policies disabled for dev branch"
+        else
+            print_warning "Could not disable access policies, continuing anyway"
+        fi
     fi
     
     # Run seed scripts using existing orchestrator (skip its reset since we already did it)
@@ -297,6 +362,16 @@ setup_database() {
     else
         print_error "Failed to load seed data"
         return 1
+    fi
+    
+    # Re-enable access policies for main branch after seeding
+    if [[ "$BRANCH_NAME" == "main" ]]; then
+        print_step "Re-enabling access policies for main branch"
+        if gel -I "$INSTANCE_NAME" query "CONFIGURE SYSTEM SET apply_access_policies := true;" 2>/dev/null; then
+            print_success "Access policies re-enabled for main branch"
+        else
+            print_warning "Could not re-enable access policies"
+        fi
     fi
 }
 
@@ -339,6 +414,11 @@ main() {
     elif [[ "$SEED_ONLY" == true ]]; then
         echo "  - Load seed data only"
         echo "  - Switch to $BRANCH_NAME branch if needed"
+    elif [[ "$POLICIES_ONLY" == true ]]; then
+        echo "  - Configure access policies based on branch"
+        echo "  - main branch: enable access policies"
+        echo "  - dev branch: disable access policies"
+        echo "  - Switch to $BRANCH_NAME branch if needed"
     else
         if [[ "$DROP_BRANCH" == true ]]; then
             echo "  - Drop and recreate $BRANCH_NAME branch (DESTRUCTIVE)"
@@ -372,6 +452,9 @@ main() {
     elif [[ "$SEED_ONLY" == true ]]; then
         apply_seed_data
         print_success "Seed data loaded successfully"
+    elif [[ "$POLICIES_ONLY" == true ]]; then
+        configure_access_policies
+        print_success "Access policies configured successfully"
     else
         setup_database
         verify_setup
@@ -395,6 +478,17 @@ main() {
         echo "  - Foundation data"
         echo "  - Industries and entities"
         echo "  - Investment data"
+        echo
+        echo "Next: gel ui"
+    elif [[ "$POLICIES_ONLY" == true ]]; then
+        echo "Access policies configured:"
+        if [[ "$BRANCH_NAME" == "main" ]]; then
+            echo "  - main branch: access policies enabled"
+            echo "  - Data access controlled by schema policies"
+        else
+            echo "  - dev branch: access policies disabled"
+            echo "  - Full data access for development"
+        fi
         echo
         echo "Next: gel ui"
     else
