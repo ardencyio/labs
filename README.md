@@ -2,6 +2,8 @@
 
 This project uses Gel (EdgeDB) with a secure multi-user authentication system that allows admin access to bypass access policies while keeping application-level policies active for regular users.
 
+The database schema is organized into modular files for better maintainability and collaboration. See `dbschema/README.md` for details on the modular schema structure.
+
 ## Quick Start
 
 ### Automated Setup (Recommended)
@@ -11,17 +13,18 @@ This project uses Gel (EdgeDB) with a secure multi-user authentication system th
 cp .env.example .env
 # Edit .env with your secure credentials (see Required Environment Variables below)
 
-# 2. Run the complete setup script
-./setup.sh           # Default: wipe branch data only (safe for development)
-./setup.sh -w        # Explicit: wipe branch data only  
-./setup.sh -d        # Drop and recreate branch (DESTRUCTIVE)
-./setup.sh --help    # Show usage options
+# 2. Run the complete setup script (instance name is required)
+./setup.sh -I labs                    # Default: wipe dev branch data only (safe for development)
+./setup.sh -I labs -w                 # Explicit: wipe dev branch data only  
+./setup.sh -I labs -d                 # Drop and recreate dev branch (DESTRUCTIVE)
+./setup.sh -I labs -b main -d         # Drop and recreate main branch (DESTRUCTIVE)
+./setup.sh -I labs --help             # Show usage options
 ```
 
 The setup script will:
 - Create main and dev branches if they don't exist
-- Reset the main branch (wipe data by default, or drop/recreate with -d flag)
-- Apply schema migrations 
+- Reset the target branch (dev by default, wipe data by default, or drop/recreate with -d flag)
+- Apply schema migrations from modular schema files
 - Configure authentication with environment variables
 - Load all seed data (companies, people, investments, etc.)
 - Verify the setup completed successfully
@@ -43,10 +46,10 @@ gel project upgrade
 # 3. Setup branches and reset database
 gel -I labs branch create main 2>/dev/null || echo "main exists"
 gel -I labs branch create dev 2>/dev/null || echo "dev exists"  
-gel -I labs branch switch main
-gel -I labs branch wipe main --non-interactive
+gel -I labs branch switch dev
+gel -I labs branch wipe dev --non-interactive
 
-# 4. Apply schema and configuration
+# 4. Apply schema and configuration (modular schema files load automatically)
 gel migrate
 source .env && export GEL_SERVER_PASSWORD AUTH_SIGNING_KEY && envsubst < config.edgeql | gel query -f -
 
@@ -61,6 +64,39 @@ gel query -f seed/scripts/04_investment.edgeql
 
 - `GEL_SERVER_PASSWORD`: Strong password for goose superuser (minimum 20 characters)
 - `AUTH_SIGNING_KEY`: Secure JWT signing key (generate with: `openssl rand -base64 256 | tr -d '\n'`)
+
+## Schema Architecture
+
+### Modular Schema Design
+
+The database schema is organized into 9 modular files for better maintainability:
+
+1. **Extensions** (`00_extensions.gel`) - Database extensions (pgvector, pgcrypto, auth, ai)
+2. **Base Types** (`01_base.gel`) - Core types, global variables, and abstract Timestamp type
+3. **Access Control** (`02_access.gel`) - Permission and Policy types for RBAC
+4. **Taxonomy** (`03_taxonomy.gel`) - Tag, Industry, and Goal types for categorization
+5. **People** (`04_people.gel`) - Person and Criteria types with access policies
+6. **Companies** (`05_companies.gel`) - Company and KeyMetrics types
+7. **Funding** (`06_funding.gel`) - Capital, Investment, and Allocation types
+8. **Ownership** (`07_ownership.gel`) - Stake and Table types for equity management
+9. **Content** (`08_content.gel`) - Article and Recognition types
+
+### Benefits of Modular Structure
+
+- **Better Organization**: Logical separation by domain (people, companies, funding, etc.)
+- **Easier Maintenance**: Smaller, focused files instead of monolithic schema
+- **Team Collaboration**: Multiple developers can work on different modules
+- **Clear Dependencies**: Numbered files ensure proper loading order
+- **Migration Compatible**: Functionally identical to monolithic schema
+
+### Text Character Icons
+
+The setup script uses universal text characters instead of emojis for cross-platform compatibility:
+
+- **✓** (Check Mark) - Success and completion indicators
+- **✗** (Ballot X) - Error and failure indicators  
+- **⚠** (Warning Sign) - Warning and caution indicators
+- **==>** - Process step indicators
 
 ## Authentication Architecture
 
@@ -153,10 +189,22 @@ gel ui  # Opens admin UI with Trust authentication
 ├── gel.toml                       # Gel project configuration (safe to commit)
 ├── config.edgeql                  # Configuration with environment variable placeholders (safe to commit)
 ├── config.template.edgeql         # Configuration template with documentation (safe to commit)
-├── dbschema/
-│   ├── default.gel                # Main schema with access policies
+├── setup.sh                       # Automated database setup script with text character icons
+├── dbschema/                      # Modular database schema files
+│   ├── 00_extensions.gel          # Database extensions (pgvector, pgcrypto, auth, ai)
+│   ├── 01_base.gel                # Core types and global variables
+│   ├── 02_access.gel              # Permission and policy system
+│   ├── 03_taxonomy.gel            # Tags, industries, and goals
+│   ├── 04_people.gel              # Person profiles and investment criteria
+│   ├── 05_companies.gel           # Company profiles and metrics
+│   ├── 06_funding.gel             # Investment rounds and funding data
+│   ├── 07_ownership.gel           # Equity and ownership tables
+│   ├── 08_content.gel             # Articles and recognition content
+│   ├── README.md                  # Schema structure documentation
 │   └── migrations/                # Generated migration files
-└── README.md                      # Documentation (this file)
+├── seed/                          # Database seed data and scripts
+│   └── scripts/                   # Seed data loading scripts
+└── README.md                      # Project documentation (this file)
 ```
 
 ## Commands Reference
