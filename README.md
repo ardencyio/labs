@@ -16,7 +16,10 @@ cp .env.example .env
 # 2. Run the complete setup script (instance name is required)
 ./setup.sh -I labs                    # Default: wipe dev branch data only (safe for development)
 ./setup.sh -I labs -w                 # Explicit: wipe dev branch data only  
-./setup.sh -I labs -c                 # Apply configuration only (no schema/data changes)
+./setup.sh -I labs -c                 # Apply configuration only (no reset, no seed)
+./setup.sh -I labs -c -b main         # Apply config to main branch only
+./setup.sh -I labs -m                 # Migration only (create and/or apply migrations)
+./setup.sh -I labs -s                 # Seed only steps (load seed data)
 ./setup.sh -I labs -d                 # Drop and recreate dev branch (DESTRUCTIVE)
 ./setup.sh -I labs -b main -d         # Drop and recreate main branch (DESTRUCTIVE)
 ./setup.sh -I labs --help             # Show usage options

@@ -9,6 +9,8 @@
 #   -b BRANCH     Target branch name (default: dev)
 #   -c, --config  Apply configuration only (no schema/data changes)
 #   -d, --drop    Drop and recreate branch (DESTRUCTIVE)  
+#   -m, --migrate Migration only (create and/or apply migrations)
+#   -s, --seed    Seed only steps (load seed data)
 #   -w, --wipe    Wipe branch data only (preserves branch)
 #   -h, --help    Show this help
 #
@@ -22,6 +24,8 @@ BRANCH_NAME="dev"
 DROP_BRANCH=false
 WIPE_ONLY=true
 CONFIG_ONLY=false
+MIGRATE_ONLY=false
+SEED_ONLY=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -43,6 +47,14 @@ while [[ $# -gt 0 ]]; do
             WIPE_ONLY=false
             shift
             ;;
+        -m|--migrate)
+            MIGRATE_ONLY=true
+            shift
+            ;;
+        -s|--seed)
+            SEED_ONLY=true
+            shift
+            ;;
         -w|--wipe)
             DROP_BRANCH=false
             WIPE_ONLY=true
@@ -60,6 +72,8 @@ while [[ $# -gt 0 ]]; do
             echo "  -b BRANCH     Target branch name (default: dev)"
             echo "  -c, --config  Apply configuration only (no schema/data changes)"
             echo "  -d, --drop    Drop and recreate branch (DESTRUCTIVE)"
+            echo "  -m, --migrate Migration only (create and/or apply migrations)"
+            echo "  -s, --seed    Seed only steps (load seed data)"
             echo "  -w, --wipe    Wipe branch data only (preserves branch)"
             echo "  -h, --help    Show this help"
             echo ""
@@ -131,6 +145,51 @@ if [[ -z "$AUTH_SIGNING_KEY" ]]; then
 fi
 
 print_success "Environment variables loaded"
+
+# Function to apply migrations only
+apply_migrations() {
+    print_step "Applying migrations only"
+    
+    # Switch to target branch if needed
+    current_branch=$(gel -I "$INSTANCE_NAME" branch list | grep "Current" | awk '{print $1}' | sed 's/\x1b\[[0-9;]*m//g')
+    if [[ "$current_branch" != "$BRANCH_NAME" ]]; then
+        gel -I "$INSTANCE_NAME" branch switch "$BRANCH_NAME"
+        print_success "Switched to $BRANCH_NAME branch"
+    fi
+    
+    # Create migration if needed and apply
+    print_step "Creating migration if needed"
+    if gel -I "$INSTANCE_NAME" migration create 2>/dev/null; then
+        print_success "Migration created"
+    else
+        print_success "No migration needed or already exists"
+    fi
+    
+    print_step "Applying migrations"
+    gel -I "$INSTANCE_NAME" migrate
+    print_success "Migrations applied"
+}
+
+# Function to apply seed data only
+apply_seed_data() {
+    print_step "Loading seed data only"
+    
+    # Switch to target branch if needed
+    current_branch=$(gel -I "$INSTANCE_NAME" branch list | grep "Current" | awk '{print $1}' | sed 's/\x1b\[[0-9;]*m//g')
+    if [[ "$current_branch" != "$BRANCH_NAME" ]]; then
+        gel -I "$INSTANCE_NAME" branch switch "$BRANCH_NAME"
+        print_success "Switched to $BRANCH_NAME branch"
+    fi
+    
+    # Run seed scripts using existing orchestrator (skip its reset since we're seed-only)
+    print_step "Running seed scripts"
+    if cd seed/scripts && SKIP_RESET=1 INSTANCE_NAME="$INSTANCE_NAME" ./run_seeds.sh && cd ../..; then
+        print_success "Seed data loaded"
+    else
+        print_error "Failed to load seed data"
+        return 1
+    fi
+}
 
 # Function to apply configuration only
 apply_configuration() {
@@ -258,6 +317,12 @@ main() {
     if [[ "$CONFIG_ONLY" == true ]]; then
         echo "  - Apply configuration only (no schema/data changes)"
         echo "  - Switch to $BRANCH_NAME branch if needed"
+    elif [[ "$MIGRATE_ONLY" == true ]]; then
+        echo "  - Apply migrations only (create and/or apply)"
+        echo "  - Switch to $BRANCH_NAME branch if needed"
+    elif [[ "$SEED_ONLY" == true ]]; then
+        echo "  - Load seed data only"
+        echo "  - Switch to $BRANCH_NAME branch if needed"
     else
         if [[ "$DROP_BRANCH" == true ]]; then
             echo "  - Drop and recreate $BRANCH_NAME branch (DESTRUCTIVE)"
@@ -285,6 +350,12 @@ main() {
     if [[ "$CONFIG_ONLY" == true ]]; then
         apply_configuration
         print_success "Configuration applied successfully"
+    elif [[ "$MIGRATE_ONLY" == true ]]; then
+        apply_migrations
+        print_success "Migrations applied successfully"
+    elif [[ "$SEED_ONLY" == true ]]; then
+        apply_seed_data
+        print_success "Seed data loaded successfully"
     else
         setup_database
         verify_setup
@@ -295,6 +366,19 @@ main() {
         echo "Configuration applied:"
         echo "  - Authentication configured (user: goose)"
         echo "  - Environment variables applied"
+        echo
+        echo "Next: gel ui"
+    elif [[ "$MIGRATE_ONLY" == true ]]; then
+        echo "Migrations applied:"
+        echo "  - Schema migrations created (if needed)"
+        echo "  - Database schema updated"
+        echo
+        echo "Next: gel ui"
+    elif [[ "$SEED_ONLY" == true ]]; then
+        echo "Seed data loaded:"
+        echo "  - Foundation data"
+        echo "  - Industries and entities"
+        echo "  - Investment data"
         echo
         echo "Next: gel ui"
     else
